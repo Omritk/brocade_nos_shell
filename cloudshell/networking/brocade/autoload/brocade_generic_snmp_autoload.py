@@ -517,7 +517,10 @@ class BrocadeGenericSNMPAutoload(AutoloadOperationsInterface):
             if_table_port_attr = {'ifType': 'str', 'ifPhysAddress': 'str', 'ifMtu': 'int', 'ifSpeed': 'int'}
             if_table = self.if_table[port]
             if_table.update(self.snmp.get_properties('IF-MIB', if_table['suffix'], if_table_port_attr))
+
             interface_name = if_table['ifDescr']
+            # Remove unneeded Module from Interface Name
+            interface_name = interface_name.replace(str(re.findall("(\d\/)", interface_name)[0]), '')
             if interface_name == '':
                 interface_name = self.entity_table[port]['entPhysicalName']
             if interface_name == '':
@@ -527,7 +530,7 @@ class BrocadeGenericSNMPAutoload(AutoloadOperationsInterface):
                              'mac': if_table[str(port)]['ifPhysAddress'],
                              'mtu': if_table[str(port)]['ifMtu'],
                              'bandwidth': if_table[str(port)]['ifSpeed'],
-                             #'description': self.snmp.get_property('IF-MIB', 'ifAlias', self.port_mapping[port]),
+                             'description': self.snmp.get('.1.3.6.1.2.1.31.1.1.1.18.' + if_table['suffix'])['ifAlias'],
                              #'adjacent': self._get_adjacent(self.port_mapping[port])
                              }
             attribute_map.update(self._get_interface_details(port))
