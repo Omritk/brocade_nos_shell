@@ -90,6 +90,13 @@ class BrocadeGenericSNMPAutoload(AutoloadOperationsInterface):
         self._filter_lower_bay_containers()
         self.get_module_list()
         self.add_relative_paths()
+        # Brocade Module start with 1 for index & name. change it to 0
+        for res in self.relative_path:
+            if len(self.relative_path[res]) == 3:
+                self.relative_path[res] = self.relative_path[res][:2] + str(int(self.relative_path[res][2])-1)
+            if len(self.relative_path[res]) > 3:
+                self.relative_path[res] = self.relative_path[res][:2] + str(int(self.relative_path[res][2]) - 1) + self.relative_path[res][3:]
+
         self._get_chassis_attributes(self.chassis_list)
         self._get_ports_attributes()
         self._get_module_attributes()
@@ -411,6 +418,8 @@ class BrocadeGenericSNMPAutoload(AutoloadOperationsInterface):
         for module in self.module_list:
             module_id = self.relative_path[module]
             module_index = self._get_resource_id(module)
+            # Change Brocade Module Name to be -1
+            module_index = str(int(module_index) - 1)
             module_details_map = {
                 'module_model': self.entity_table[module]['entPhysicalDescr'],
                 'version': self.snmp.get_property('ENTITY-MIB', 'entPhysicalSoftwareRev', module),
