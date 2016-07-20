@@ -647,7 +647,8 @@ class BrocadeGenericSNMPAutoload(AutoloadOperationsInterface):
                   'model': self._get_device_model(),
                   'location': self.snmp.get_property('SNMPv2-MIB', 'sysLocation', 0),
                   'contact': self.snmp.get_property('SNMPv2-MIB', 'sysContact', 0),
-                  'version': ''}
+                  # Get Brocade FW OS Version directly
+                  'version': self.snmp.get('.1.3.6.1.4.1.1588.2.1.1.1.1.6.0')['enterprises']}
 
         match_version = re.search('Version\s+(?P<software_version>\S+)\S*\s+',
                                   self.snmp.get_property('SNMPv2-MIB', 'sysDescr', 0))
