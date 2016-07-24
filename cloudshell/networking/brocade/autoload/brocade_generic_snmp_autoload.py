@@ -33,7 +33,8 @@ class BrocadeGenericSNMPAutoload(AutoloadOperationsInterface):
         self.relative_path = {}
         self.port_mapping = {}
         self.entity_table_black_list = ['alarm', 'fan', 'sensor', 'other']
-        self.port_exclude_pattern = 'serial|stack|engine|management'
+        self.port_exclude_pattern = 'serial|stack|engine|management|vlan|other|softwareLoopback|tunnel|fibreChannel|' \
+                                    'eth[0-9]'
         self.module_exclude_pattern = 'cevsfp'
         self.resources = list()
         self.attributes = list()
@@ -91,11 +92,11 @@ class BrocadeGenericSNMPAutoload(AutoloadOperationsInterface):
         self.get_module_list()
         self.add_relative_paths()
         # Brocade Module start with 1 for index & name. change it to 0
-        for res in self.relative_path:
-            if len(self.relative_path[res]) == 3:
-                self.relative_path[res] = self.relative_path[res][:2] + str(int(self.relative_path[res][2])-1)
-            if len(self.relative_path[res]) > 3:
-                self.relative_path[res] = self.relative_path[res][:2] + str(int(self.relative_path[res][2]) - 1) + self.relative_path[res][3:]
+        # for res in self.relative_path:
+        #     if len(self.relative_path[res]) == 3:
+        #         self.relative_path[res] = self.relative_path[res][:2] + str(int(self.relative_path[res][2])-1)
+        #     if len(self.relative_path[res]) > 3:
+        #         self.relative_path[res] = self.relative_path[res][:2] + str(int(self.relative_path[res][2]) - 1) + self.relative_path[res][3:]
 
         self._get_chassis_attributes(self.chassis_list)
         self._get_ports_attributes()
@@ -159,7 +160,7 @@ class BrocadeGenericSNMPAutoload(AutoloadOperationsInterface):
             raise Exception('Cannot load entPhysicalTable. Autoload cannot continue')
         self.logger.info('Entity table loaded')
 
-        self.lldp_local_table = self.snmp.get_table('LLDP-MIB', 'lldpLocPortDesc')
+        self.lldp_local_table = self.snmp.get_table('LLDP-MIB', 'lldpLocPortTable')
         self.lldp_remote_table = self.snmp.get_table('LLDP-MIB', 'lldpRemTable')
         self.cdp_index_table = self.snmp.get_table('BROCADE-CDP-MIB', 'cdpInterface')
         self.cdp_table = self.snmp.get_table('BROCADE-CDP-MIB', 'cdpCacheTable')
@@ -233,16 +234,15 @@ class BrocadeGenericSNMPAutoload(AutoloadOperationsInterface):
 
             if temp_entity_table['entPhysicalClass'] == 'chassis':
                 self.chassis_list.append(index)
-            elif temp_entity_table['entPhysicalClass'] == 'port':
-                if not re.search(self.port_exclude_pattern, temp_entity_table['entPhysicalName']) \
-                        and not re.search(self.port_exclude_pattern, temp_entity_table['entPhysicalDescr']):
-                    port_id = self._get_mapping(index, temp_entity_table['entPhysicalDescr'])
-                    if port_id and port_id in self.if_table and port_id not in self.port_mapping.values():
-                        self.port_mapping[index] = port_id
-                        self.port_list.append(index)
+
             elif temp_entity_table['entPhysicalClass'] == 'powerSupply':
                 self.power_supply_list.append(index)
-
+        # Brocade Interfaces sits on the IF-MIB only.
+        port_list = self.snmp.get_table('IF-MIB', 'ifTable')
+        for index in port_list.keys():
+            if not re.search(self.port_exclude_pattern, port_list[index]['ifDescr']) \
+                    and not (re.search(self.port_exclude_pattern, port_list[index]['ifType'])):
+                self.port_list.append(port_list[index])
         self._filter_entity_table(result_dict)
         return result_dict
 
@@ -272,31 +272,17 @@ class BrocadeGenericSNMPAutoload(AutoloadOperationsInterface):
 
         :return:
         """
-        self.full_port_list = []
-        for port in self.if_table:
-            if 'Ethernet' in self.if_table[port]['ifDescr']:
-                self.full_port_list.append(self.if_table[port]['ifDescr'])
-        port_list = list(self.full_port_list)
-        self.port_list = port_list
-        module_list = list(self.module_list)
-        for module in module_list:
-            if type(module) is not int:
-                for entity in self.entity_table:
-                    if self.entity_table[entity]['entPhysicalName'] == module:
-                        module = int(self.entity_table[entity]['suffix'])
-                        break
+
+
+        for module in self.module_list:
             if module not in self.exclusion_list:
-                self.relative_path[module] = self.get_relative_path(module) + '/' + self._get_resource_id(module)
+                self.relative_path[module] = self.get_relative_path(module) + '/' + str(module)
             else:
                 self.module_list.remove(module)
-        for port in port_list:
-            if type(port) is not int:
-                for entity in self.if_table:
-                    if self.if_table[entity]['ifDescr'] == port:
-                        port = int(self.if_table[entity]['suffix'])
-                        break
+        for port in self.port_list:
+            port = int(port['suffix'])
             if port not in self.exclusion_list:
-                self.relative_path[port] = self.get_relative_path(port) + '/' + self._get_resource_id(port)
+                self.relative_path[port] = self.get_relative_path(port) + '/' + str(port)
             else:
                 self.port_list.remove(port)
 
@@ -322,26 +308,19 @@ class BrocadeGenericSNMPAutoload(AutoloadOperationsInterface):
                     if moudle_name not in self.module_list:
                         self.module_list.append(int(entity))
 
+        # for port in self.full_port_list:
+        #     modules = []
+        #     modules.append(self._get_module_parents(port))
+        #     for module in modules:
+        #         if module in self.module_list:
+        #             continue
+        #         vendor_type = self.snmp.get_property('ENTITY-MIB', 'entPhysicalVendorType', module)
+        #         if not re.search(self.module_exclude_pattern, vendor_type.lower()):
+        #             if module not in self.exclusion_list and module not in self.module_list:
+        #                 self.module_list.append(module)
+        #         else:
+        #             self._excluded_models.append(module)
 
-    #     self.full_port_list = []
-    #
-    #     for port in self.if_table:
-    #         if 'Ethernet' in self.if_table[port]['ifDescr']:
-    #             self.full_port_list.append(self.if_table[port]['ifDescr'])
-    #
-    #     for port in self.full_port_list:
-    #         modules = []
-    #         modules.append(self._get_module_parents(port))
-    #         for module in modules:
-    #             if module in self.module_list:
-    #                 continue
-    #             vendor_type = self.snmp.get_property('ENTITY-MIB', 'entPhysicalVendorType', module)
-    #             if not re.search(self.module_exclude_pattern, vendor_type.lower()):
-    #                 if module not in self.exclusion_list and module not in self.module_list:
-    #                     self.module_list.append(module)
-    #             else:
-    #                 self._excluded_models.append(module)
-    #
     # def _get_module_parents(self, module_id):
     #     result = []
     #     module_id = 'MODULE ' + module_id.split('/')[0][-1:]
@@ -510,32 +489,32 @@ class BrocadeGenericSNMPAutoload(AutoloadOperationsInterface):
         """
 
         self.logger.info('Start loading Ports')
-        for iftab in self.if_table:
-            if 'Ethernet' not in self.if_table[iftab]['ifDescr']:
-                self.if_table.pop(iftab)
-        for port in self.if_table:
-            if_table_port_attr = {'ifType': 'str', 'ifPhysAddress': 'str', 'ifMtu': 'int', 'ifSpeed': 'int'}
-            if_table = self.if_table[port]
-            if_table.update(self.snmp.get_properties('IF-MIB', if_table['suffix'], if_table_port_attr))
-
-            interface_name = if_table['ifDescr']
-            # Remove unneeded Module from Interface Name
-            interface_name = interface_name.replace(str(re.findall("(\d\/)", interface_name)[0]), '')
+        for port in self.port_list:
+            interface_name = port['ifDescr']
+            # Add Chassis to Interface name
+            chas_id = int(self.get_relative_path(int(port['suffix'])).split('/')[0])
+            # Voodoo
+            chas_id = str(self.chassis_list[chas_id])
+            interface_name = interface_name.split(' ')[0] + ' ' + chas_id + '/' + interface_name.split(' ')[1]
+            # Voodoo
+            # Replace "/" to "-"
+            interface_name = interface_name.replace('/', '-')
             if interface_name == '':
                 interface_name = self.entity_table[port]['entPhysicalName']
             if interface_name == '':
                 continue
-            interface_type = if_table[str(port)]['ifType'].replace('/', '').replace("'", '').replace('\\', '')
+            interface_type = port['ifType'].replace('/', '').replace("'", '').replace('\\', '')
             attribute_map = {'l2_protocol_type': interface_type,
-                             'mac': if_table[str(port)]['ifPhysAddress'],
-                             'mtu': if_table[str(port)]['ifMtu'],
-                             'bandwidth': if_table[str(port)]['ifSpeed'],
-                             'description': self.snmp.get('.1.3.6.1.2.1.31.1.1.1.18.' + if_table['suffix'])['ifAlias'],
+                             'mac': port['ifPhysAddress'],
+                             'mtu': port['ifMtu'],
+                             'bandwidth': port['ifSpeed'],
+                             'description': self.snmp.get('.1.3.6.1.2.1.31.1.1.1.18.' + port['suffix'])['ifAlias'],
                              #'adjacent': self._get_adjacent(self.port_mapping[port])
                              }
             attribute_map.update(self._get_interface_details(port))
             attribute_map.update(self._get_ip_interface_details(port))
-            port_object = Port(name=interface_name, relative_path=self.relative_path[port], **attribute_map)
+            port_object = Port(name=interface_name, relative_path=self.relative_path[int(port['suffix'])],
+                               **attribute_map)
             self._add_resource(port_object)
             self.logger.info('Added ' + interface_name + ' Port')
         self.logger.info('Finished Loading Ports')
@@ -718,7 +697,7 @@ class BrocadeGenericSNMPAutoload(AutoloadOperationsInterface):
 
         port_id = None
         try:
-            ent_alias_mapping_identifier = self.snmp.get(('ENTITY-MIB', 'entAliasMappingIdentifier', port_index, 0))
+            ent_alias_mapping_identifier = self.snmp.get(('IF-MIB', 'entAliasMappingIdentifier', port_index, 0))
             port_id = int(ent_alias_mapping_identifier['entAliasMappingIdentifier'].split('.')[-1])
         except Exception as e:
             self.logger.error(e.message)
