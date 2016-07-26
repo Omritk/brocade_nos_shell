@@ -13,7 +13,7 @@ ETHERNET_COMMANDS_TEMPLATES = {
                                            [r'\bdot1q\b|\bisl\b|\bnegotiate\b'],
                                            'Wrong encapsulation name!'),
     'exit': CommandTemplate('exit'),
-    'trunk_allow_vlan': CommandTemplate('switchport trunk allowed vlan {0}',
+    'trunk_allow_vlan': CommandTemplate('switchport trunk allowed vlan add {0}',
                                         validateVlanRange, 'Wrong vlan number(s)!'),
     'trunk_remove_vlan': CommandTemplate('switchport trunk allowed vlan remove {0}',
                                          validateVlanRange, 'Wrong vlan number!'),

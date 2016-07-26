@@ -125,8 +125,8 @@ class BrocadeConnectivityOperations(ConnectivityOperations):
         vlan_config_actions = OrderedDict()
         interface_config_actions = OrderedDict()
         vlan_config_actions['configure_vlan'] = vlan_range
-        vlan_config_actions['state_active'] = []
-        vlan_config_actions['no_shutdown'] = []
+        #vlan_config_actions['state_active'] = []
+        #vlan_config_actions['no_shutdown'] = []
 
         self.configure_vlan(vlan_config_actions)
         self.cli.exit_configuration_mode()
@@ -229,12 +229,12 @@ class BrocadeConnectivityOperations(ConnectivityOperations):
         current_config = self.cli.send_command(
             'show running-config interface {0}'.format(commands_dict['configure_interface']))
 
+        # Brocade only require to nullify the "switchport" command
         for line in current_config.splitlines():
-            if re.search('^\s*switchport\s+', line):
-                line_to_remove = re.sub('\s+\d+[-\d+,]+', '', line)
-                if not line_to_remove:
-                    line_to_remove = line
+            if re.search('switchport', line):
+                line_to_remove = 'switchport'
                 commands_list.insert(1, 'no {0}'.format(line_to_remove.strip(' ')))
+                break
 
         expected_map = {'[\[\(][Yy]es/[Nn]o[\)\]]|\[confirm\]': lambda session: session.send_line('yes'),
                         '[\[\(][Yy]/[Nn][\)\]]': lambda session: session.send_line('y')}
